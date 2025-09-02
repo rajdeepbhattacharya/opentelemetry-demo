@@ -47,30 +47,33 @@ public class CartService : Oteldemo.CartService.CartServiceBase
     }
 
     public override async Task<Cart> GetCart(GetCartRequest request, ServerCallContext context)
+{
+    var activity = Activity.Current;
+    activity?.SetTag("app.user.id", request.UserId);
+    activity?.AddEvent(new("Fetch cart"));
+
+    try
     {
-        var activity = Activity.Current;
-        activity?.SetTag("app.user.id", request.UserId);
-        activity?.AddEvent(new("Fetch cart"));
-
-        try
+        // VULNERABLE CODE ADDED HERE
+        // Assuming GetCartUnsafeAsync directly uses string concatenation to build a query
+        var cart = await _badCartStore.GetCartUnsafeAsync(request.UserId);
+        
+        var totalCart = 0;
+        foreach (var item in cart.Items)
         {
-            var cart = await _cartStore.GetCartAsync(request.UserId);
-            var totalCart = 0;
-            foreach (var item in cart.Items)
-            {
-                totalCart += item.Quantity;
-            }
-            activity?.SetTag("app.cart.items.count", totalCart);
+            totalCart += item.Quantity;
+        }
+        activity?.SetTag("app.cart.items.count", totalCart);
 
-            return cart;
-        }
-        catch (RpcException ex)
-        {
-            activity?.AddException(ex);
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            throw;
-        }
+        return cart;
     }
+    catch (RpcException ex)
+    {
+        activity?.AddException(ex);
+        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+        throw;
+    }
+}
 
     public override async Task<Empty> EmptyCart(EmptyCartRequest request, ServerCallContext context)
     {
